@@ -1,0 +1,7 @@
+shortuuid
+redis
+rq
+Flask
+flask-cors
+pillow
+flasgger

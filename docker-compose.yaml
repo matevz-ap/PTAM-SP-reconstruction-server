@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  server:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./server.py:/app/server.py
+      - ./tasks.py:/app/tasks.py
+    ports:
+      - '5000:5000'
+    deploy:
+      resources:
+        reservations:
+          devices:
+              - capabilities: [gpu]
+  redis:
+    image: redis
+    ports:
+       - '5379:5379' 

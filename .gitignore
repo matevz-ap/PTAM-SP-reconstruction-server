@@ -1,0 +1,15 @@
+# Ignore IDE files
+.idea/
+.vscode/
+
+# Ignore dataset
+data/
+
+# Ignore backup files
+_bak/
+
+sources/
+
+__pycache__
+
+env/
