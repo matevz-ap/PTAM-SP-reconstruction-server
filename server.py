@@ -1,6 +1,7 @@
 import os
 import json
 import redis
+import shutil
 from PIL import Image
 import shortuuid
 
@@ -139,6 +140,19 @@ def get_results(job_key):
         return json.loads(job.result), 200
     else:
         return json.dumps({"status": "in_progress"}), 202
+        
+@app.route("/<uuid>/download", methods=['GET'])
+def download(uuid):
+    folder_path = f"./data/{uuid}"
+    shutil.make_archive(folder_path, 'zip', folder_path)
+
+    with open(f"{folder_path}.zip", 'rb') as f:
+        data = f.read()
+    response = make_response(data)
+    response.headers['Content-Type'] = 'application/zip'
+    response.headers['Content-Disposition'] = f'attachment; filename={uuid}.zip'
+    return response
+
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
