@@ -8,11 +8,6 @@ services:
       - ./tasks.py:/app/tasks.py
     ports:
       - '5000:5000'
-    deploy:
-      resources:
-        reservations:
-          devices:
-              - capabilities: [gpu]
   redis:
     image: redis
     ports:
