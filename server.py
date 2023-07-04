@@ -28,8 +28,6 @@ def save_file(uuid, file):
     file.save(f"data/{uuid}/images/{num_of_images}.jpg")
 
 def get_camera_settings(uuid, image, focal):
-    # exif = image.getexif().get_ifd(0x8769)
-    
     with open(f"data/{uuid}/camera_settings.txt", 'a') as file:
         width, height = image.size
         file.write(f"{width}\n")
@@ -153,6 +151,12 @@ def download(uuid):
     response.headers['Content-Disposition'] = f'attachment; filename={uuid}.zip'
     return response
 
+@app.route("/get_focal", methods=['POST'])
+def get_focal():
+    image = request.files['image']
+    image = Image.open(image)
+    focal = image.getexif().get_ifd(0x8769).get(37386)
+    return make_response(json.dumps({"focal": int(focal * 1000) or None}))
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
