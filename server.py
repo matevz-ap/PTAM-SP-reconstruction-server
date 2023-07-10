@@ -4,6 +4,7 @@ import redis
 import shutil
 from PIL import Image
 import shortuuid
+import zipfile
 
 from flask import Flask, request, send_file, make_response
 from flask_cors import CORS
@@ -151,11 +152,20 @@ def download(uuid):
     response.headers['Content-Disposition'] = f'attachment; filename={uuid}.zip'
     return response
 
+@app.route("/<uuid>/upload", methods=['POST'])
+def upload(uuid):
+    with open(f"./data/{uuid}.zip", "wb") as f:
+        f.write(request.data)
+
+    with zipfile.ZipFile(f"./data/{uuid}.zip", 'r') as zip_ref:
+        zip_ref.extractall(f"./data/{uuid}")
+    return "OK", 200
+
 @app.route("/get_focal", methods=['POST'])
 def get_focal():
     image = request.files['image']
     image = Image.open(image)
-    focal = image.getexif().get_ifd(0x8769).get(37386)
+    focal = image.getexif().get_ifd(0x8769).get(37386, 0)
     return make_response(json.dumps({"focal": int(focal * 1000) or None}))
 
 if __name__ == "__main__":
