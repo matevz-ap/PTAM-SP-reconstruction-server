@@ -81,3 +81,12 @@ def next_best_view_task(uuid):
             "finished": True,
             "reconstruction_id": uuid,
         })
+
+def refine_mesh_task(uuid):
+    command = f"cd build/; ./reconstruction_cli refine ../data/{uuid}/images/ ../data/{uuid}/camera_settings.txt ../data/{uuid}/"
+    output = subprocess.run(command, capture_output=True, shell=True).stdout.decode()
+    print(output)
+    return json.dumps({
+            "finished": True,
+            "reconstruction_id": uuid,
+        })

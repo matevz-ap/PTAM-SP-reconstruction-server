@@ -12,7 +12,7 @@ from rq import Queue
 from rq.job import Job
 from rq.exceptions import NoSuchJobError
 
-from tasks import generate_ptam_task, generate_ply_task, init_reconstruction_task, extend_reconstruction_task, next_best_view_task, reconstruct_mesh_task, texture_task
+from tasks import generate_ptam_task, generate_ply_task, init_reconstruction_task, extend_reconstruction_task, next_best_view_task, reconstruct_mesh_task, texture_task, refine_mesh_task
 
 app = Flask(__name__)
 CORS(app, support_credentials=True)
@@ -106,7 +106,7 @@ def download_ply(uuid):
         return send_file(f"./data/{uuid}/ply.ply")
     except FileNotFoundError:
         return "No ply file", 404
-
+        
 @app.route("/<uuid>/download/texture", methods=["GET"])
 def download_texture(uuid):
     response = make_response(send_file(f"./data/{uuid}/ply.png"))
@@ -119,6 +119,11 @@ def download_mvs(uuid):
 @app.route("/<uuid>/download/ptam", methods=["GET"])
 def download_ptam(uuid):
     return send_file(f"./data/{uuid}/installer")
+
+@app.route("/<uuid>/refine", methods=["GET"])
+def refine_mesh(uuid):
+    job = q.enqueue(refine_mesh_task, args=(uuid,), job_timeout=3600)
+    return job.get_id()
 
 @app.route("/<uuid>/file_availability/<file_name>", methods=["GET"])
 def file_availability(uuid, file_name):
