@@ -87,6 +87,7 @@ def refine_mesh_task(uuid):
     output = subprocess.run(command, capture_output=True, shell=True).stdout.decode()
     print(output)
     return json.dumps({
+            "status": "finished",
             "finished": True,
             "reconstruction_id": uuid,
         })
