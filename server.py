@@ -17,7 +17,7 @@ from tasks import generate_ptam_task, generate_ply_task, init_reconstruction_tas
 app = Flask(__name__)
 CORS(app, support_credentials=True)
 
-redis_url = os.getenv('REDISTOGO_URL', 'redis://localhost:6379')
+redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
 conn = redis.from_url(redis_url)
 q = Queue(connection=conn)
 
