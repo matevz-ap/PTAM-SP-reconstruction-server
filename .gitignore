@@ -4,6 +4,7 @@
 
 # Ignore dataset
 data/
+dataset/
 
 # Ignore backup files
 _bak/
