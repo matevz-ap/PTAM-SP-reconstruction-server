@@ -39,6 +39,12 @@ def get_camera_settings(uuid, image, focal):
         file.write("1.0\n") # aspect ratio
         file.write("0.0\n\n") # skew
 
+def enqueue_job(function, *args):
+    for job in q.jobs:
+        if not job.is_finished and job.args[0] == args[0]:
+            return q.enqueue(function, *args, depends_on=job)
+    return q.enqueue(function, *args)
+
 @app.route("/init", methods=["POST"])
 def initialize_reconstruction():
     if "image" not in request.files:
@@ -61,35 +67,35 @@ def extend_reconstruction(uuid):
 
     number_of_images = _number_of_images(uuid)
     if  number_of_images == 2: # also needs check that init is not in progress
-        job = q.enqueue(init_reconstruction_task, uuid)
+        job = enqueue_job(init_reconstruction_task, uuid)
     else:
-        job = q.enqueue(extend_reconstruction_task, uuid, number_of_images)
+        job = enqueue_job(extend_reconstruction_task, uuid, number_of_images)
 
     return job.get_id()
 
 @app.route("/<uuid>/reconstruct_mesh", methods=["GET"])
 def reconstruct_mesh(uuid):
-    job = q.enqueue(reconstruct_mesh_task, uuid)
+    job = enqueue_job(reconstruct_mesh_task, uuid)
     return job.get_id()
 
 @app.route("/<uuid>/next_best_view", methods=["GET"])
 def next_best_view(uuid):
-    job = q.enqueue(next_best_view_task, uuid)
+    job = enqueue_job(next_best_view_task, uuid)
     return job.get_id()
 
 @app.route("/<uuid>/texture", methods=["GET"])
 def texture(uuid):
-    job = q.enqueue(texture_task, uuid)
+    job = enqueue_job(texture_task, uuid)
     return job.get_id()
 
 @app.route("/<uuid>/generate/ply", methods=["GET"])
 def generate_ply(uuid):
-    job = q.enqueue(generate_ply_task, uuid)
+    job = enqueue_job(generate_ply_task, uuid)
     return job.get_id()
 
 @app.route("/<uuid>/generate/ptam", methods=["GET"])
 def generate_ptam(uuid):
-    job = q.enqueue(generate_ptam_task, uuid)
+    job = enqueue_job(generate_ptam_task, uuid)
     return job.get_id()
 
 @app.route("/<uuid>/download_or_generate/ply", methods=["GET"])
@@ -97,7 +103,7 @@ def download_or_generate_ply(uuid):
     try:
         return send_file(f"./data/{uuid}/ply.ply")
     except FileNotFoundError:
-        job = q.enqueue(texture_task, uuid)
+        job = enqueue_job(texture_task, uuid)
         return job.get_id(), 404
 
 @app.route("/<uuid>/download/ply", methods=["GET"])
@@ -122,7 +128,7 @@ def download_ptam(uuid):
 
 @app.route("/<uuid>/refine", methods=["GET"])
 def refine_mesh(uuid):
-    job = q.enqueue(refine_mesh_task, args=(uuid,), job_timeout=3600)
+    job = enqueue_job(refine_mesh_task, args=(uuid,), job_timeout=3600)
     return job.get_id()
 
 @app.route("/<uuid>/file_availability/<file_name>", methods=["GET"])
