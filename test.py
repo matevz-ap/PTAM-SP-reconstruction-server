@@ -26,6 +26,9 @@ def rec(process_id):
             break
         time.sleep(1)
     end = time.time()
+    recon = [requests.get(f"http://127.0.0.1:5000/results/{job}").json() for job in jobs]
+    print(recon)
+    # print("recon: ", [r["duration"] for r in recon])
     print(f"Time - {process_id}: ", end - start)
 
 procs = []
@@ -33,6 +36,7 @@ for i in range(0, 5):
     proc = Process(target=rec, args=(i,))
     procs.append(proc)
     proc.start()
+    time.sleep(1)
 
 
 for proc in procs:
