@@ -5,10 +5,11 @@ import shutil
 from PIL import Image
 import shortuuid
 import zipfile
+import time
 
 from flask import Flask, request, send_file, make_response
 from flask_cors import CORS
-from rq import Queue
+from rq import Queue, Worker
 from rq.job import Job
 from rq.exceptions import NoSuchJobError
 
@@ -22,11 +23,19 @@ conn = redis.from_url(redis_url)
 q = Queue(connection=conn)
 
 def _number_of_images(uuid):
-    return len([file for file in os.scandir(f"data/{uuid}/images")])
+    return len([file for file in os.scandir(f"./data/{uuid}/images")])
 
-def save_file(uuid, file):
-    num_of_images = _number_of_images(uuid)
-    file.save(f"data/{uuid}/images/{num_of_images}.jpg")
+def save_file(uuid, file, num):
+    # num_of_images = _number_of_images(uuid)
+    fails = 0
+    while fails < 5:
+        try:
+            file.save(f"data/{uuid}/images/{num}.jpg")
+            return
+        except:
+            print("failed")
+            fails += 1
+            time.sleep(1)
 
 def get_camera_settings(uuid, image, focal):
     with open(f"data/{uuid}/camera_settings.txt", 'a') as file:
@@ -39,11 +48,20 @@ def get_camera_settings(uuid, image, focal):
         file.write("1.0\n") # aspect ratio
         file.write("0.0\n\n") # skew
 
-def enqueue_job(function, *args):
+def exists_job(uuid):
     for job in q.jobs:
-        if not job.is_finished and job.args[0] == args[0]:
-            return q.enqueue(function, *args, depends_on=job)
-    return q.enqueue(function, *args)
+        if not job.is_finished and job.args[0] == uuid:
+            return job
+    for w in Worker.all(queue=q):
+        job = w.get_current_job()
+        if job and job.args[0] == uuid:
+            return job
+    return None
+
+def enqueue_job(function, *args, **kwargs):
+    if job := exists_job(args[0]):
+        return q.enqueue(function, *args, **kwargs, depends_on=job)
+    return q.enqueue(function, *args, **kwargs)
 
 @app.route("/init", methods=["POST"])
 def initialize_reconstruction():
@@ -53,7 +71,10 @@ def initialize_reconstruction():
     uuid = shortuuid.uuid()
     image = request.files['image']
     os.system(f"mkdir -p data/{uuid}/images")
-    save_file(uuid, image)
+    os.system(f"mkdir -p data/{uuid}/results")
+    conn.set(uuid, 1)
+
+    save_file(uuid, image, 0)
     focal = request.form.get("focal", 6000)
     get_camera_settings(uuid, Image.open(image), focal or 6000)
     return uuid
@@ -63,13 +84,14 @@ def extend_reconstruction(uuid):
     if "image" not in request.files:
         return "Missing requred reques paramater: 'image' of type file", 400
 
-    save_file(uuid, request.files['image'])
-
-    number_of_images = _number_of_images(uuid)
-    if  number_of_images == 2: # also needs check that init is not in progress
+    num_of_images = int(conn.get(uuid).decode())
+    save_file(uuid, request.files['image'], num_of_images)
+    if num_of_images == 1:
+        conn.set(uuid, num_of_images + 1)
         job = enqueue_job(init_reconstruction_task, uuid)
     else:
-        job = enqueue_job(extend_reconstruction_task, uuid, number_of_images)
+        job = enqueue_job(extend_reconstruction_task, uuid, num_of_images + 1)
+        conn.set(uuid, num_of_images + 1)
 
     return job.get_id()
 
@@ -109,14 +131,19 @@ def download_or_generate_ply(uuid):
 @app.route("/<uuid>/download/ply", methods=["GET"])
 def download_ply(uuid):
     try:
-        return send_file(f"./data/{uuid}/ply.ply")
+        return send_file(f"./data/{uuid}/results/ply.ply")
     except FileNotFoundError:
         return "No ply file", 404
         
 @app.route("/<uuid>/download/texture", methods=["GET"])
 def download_texture(uuid):
-    response = make_response(send_file(f"./data/{uuid}/ply.png"))
-    return response
+    # img = Image.open(f"./data/{uuid}/results/ply.png")
+    # wpercent = (300/float(img.size[0]))
+    # hsize = int((float(img.size[1])*float(wpercent)))
+    # img = img.resize((300,hsize), Image.Resampling.LANCZOS)
+    # img.save(f"./data/{uuid}/results/ply_resize.png", format='PNG')
+    # return make_response(send_file(f"./data/{uuid}/results/ply_resize.png"))
+    return send_file(f"./data/{uuid}/results/ply.png")
 
 @app.route("/<uuid>/download/mvs", methods=["GET"])
 def download_mvs(uuid):
@@ -128,7 +155,7 @@ def download_ptam(uuid):
 
 @app.route("/<uuid>/refine", methods=["GET"])
 def refine_mesh(uuid):
-    job = enqueue_job(refine_mesh_task, args=(uuid,), job_timeout=3600)
+    job = enqueue_job(refine_mesh_task, uuid, job_timeout=3600)
     return job.get_id()
 
 @app.route("/<uuid>/file_availability/<file_name>", methods=["GET"])
@@ -165,11 +192,11 @@ def download(uuid):
 
 @app.route("/<uuid>/upload", methods=['POST'])
 def upload(uuid):
-    with open(f"./data/{uuid}.zip", "wb") as f:
+    with open(f"./data/{uuid}/results.zip", "wb") as f:
         f.write(request.data)
 
-    with zipfile.ZipFile(f"./data/{uuid}.zip", 'r') as zip_ref:
-        zip_ref.extractall(f"./data/{uuid}")
+    with zipfile.ZipFile(f"./data/{uuid}/results.zip", 'r') as zip_ref:
+        zip_ref.extractall(f"./data/{uuid}/results")
     return "OK", 200
 
 @app.route("/get_focal", methods=['POST'])
